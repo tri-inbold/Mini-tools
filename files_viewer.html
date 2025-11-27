@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Viewer</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #fff;
+  color: #333;
+  overflow: hidden;
+}
+
+#dropzone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed #ccc;
+  background: #fafafa;
+  transition: all 0.2s;
+}
+
+#dropzone.dragover {
+  border-color: #333;
+  background: #f0f0f0;
+}
+
+#dropzone.hidden {
+  display: none;
+}
+
+#dropText {
+  font-size: 24px;
+  color: #999;
+  pointer-events: none;
+}
+
+#viewer {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  flex-direction: column;
+}
+
+#viewer.active {
+  display: flex;
+}
+
+#toolbar {
+  height: 50px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+#closeBtn {
+  padding: 8px 16px;
+  background: #333;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#closeBtn:hover {
+  background: #555;
+}
+
+#contentArea {
+  flex: 1;
+  overflow: auto;
+  padding-bottom: 45px;
+}
+
+#content {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+#content img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+#content video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+#content pre {
+  background: #f5f5f5;
+  padding: 15px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+#content iframe {
+  width: 100%;
+  height: calc(100vh - 140px);
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+#content canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+table th {
+  background: #f5f5f5;
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  border: 1px solid #ddd;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+table td {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+}
+
+table tr:nth-child(even) {
+  background: #fafafa;
+}
+
+table tr:hover {
+  background: #f0f0f0;
+}
+
+.error {
+  color: #d00;
+  padding: 20px;
+  text-align: center;
+  font-size: 16px;
+}
+
+.info {
+  color: #666;
+  padding: 20px;
+  text-align: center;
+  font-size: 14px;
+}
+
+#tabs {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 45px;
+  background: #f5f5f5;
+  border-top: 1px solid #ddd;
+  display: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  z-index: 100;
+}
+
+#tabs.active {
+  display: block;
+}
+
+.tab {
+  display: inline-block;
+  padding: 12px 20px;
+  background: #e0e0e0;
+  border-right: 1px solid #ccc;
+  cursor: pointer;
+  font-size: 13px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+}
+
+.tab:hover {
+  background: #d0d0d0;
+}
+
+.tab.active {
+  background: #fff;
+  border-top: 2px solid #333;
+  padding-top: 10px;
+}
+
+.tab-close {
+  margin-left: 8px;
+  color: #999;
+  font-weight: bold;
+}
+
+.tab-close:hover {
+  color: #333;
+}
+
+#fileName {
+  font-size: 14px;
+  color: #666;
+  font-weight: 600;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-size: 16px;
+}
+</style>
+</head>
+<body>
+
+<div id="dropzone">
+  <div id="dropText">Thả file vào đây hoặc click để chọn</div>
+</div>
+
+<div id="viewer">
+  <div id="toolbar">
+    <div id="fileName"></div>
+    <button id="closeBtn">✕ Đóng tất cả</button>
+  </div>
+  <div id="contentArea">
+    <div id="content"></div>
+  </div>
+  <div id="tabs"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+<script>
+// Configure PDF.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const dropzone = document.getElementById('dropzone');
+const viewer = document.getElementById('viewer');
+const content = document.getElementById('content');
+const closeBtn = document.getElementById('closeBtn');
+const tabs = document.getElementById('tabs');
+const fileName = document.getElementById('fileName');
+
+let openFiles = [];
+let currentFileIndex = -1;
+
+// Prevent default drag behaviors
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+  dropzone.addEventListener(eventName, preventDefaults, false);
+  document.body.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+// Highlight drop zone when item is dragged over it
+['dragenter', 'dragover'].forEach(eventName => {
+  dropzone.addEventListener(eventName, () => {
+    dropzone.classList.add('dragover');
+  }, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+  dropzone.addEventListener(eventName, () => {
+    dropzone.classList.remove('dragover');
+  }, false);
+});
+
+// Handle dropped files
+dropzone.addEventListener('drop', handleDrop, false);
+
+function handleDrop(e) {
+  const dt = e.dataTransfer;
+  const files = dt.files;
+  
+  for (let i = 0; i < files.length; i++) {
+    addFile(files[i]);
+  }
+}
+
+function addFile(file) {
+  const fileData = {
+    file: file,
+    name: file.name,
+    content: null
+  };
+  
+  openFiles.push(fileData);
+  const index = openFiles.length - 1;
+  
+  loadFile(fileData, index);
+  renderTabs();
+  switchToFile(index);
+}
+
+function loadFile(fileData, index) {
+  const file = fileData.file;
+  const fileName = file.name.toLowerCase();
+  const ext = fileName.split('.').pop();
+  
+  // Images
+  if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg', 'tiff', 'tif', 'ico'].includes(ext)) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      fileData.content = `<img src="${e.target.result}" alt="${file.name}">`;
+      if (currentFileIndex === index) displayCurrentFile();
+    };
+    reader.readAsDataURL(file);
+  }
+  // Video
+  else if (['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(ext)) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      fileData.content = `<video src="${e.target.result}" controls></video>`;
+      if (currentFileIndex === index) displayCurrentFile();
+    };
+    reader.readAsDataURL(file);
+  }
+  // Audio
+  else if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      fileData.content = `<audio src="${e.target.result}" controls style="width:100%;max-width:600px;display:block;margin:20px auto;"></audio>`;
+      if (currentFileIndex === index) displayCurrentFile();
+    };
+    reader.readAsDataURL(file);
+  }
+  // PDF
+  else if (ext === 'pdf') {
+    loadPDF(file, fileData, index);
+  }
+  // CSV
+  else if (ext === 'csv') {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      Papa.parse(e.target.result, {
+        complete: (results) => {
+          fileData.content = generateTable(results.data);
+          if (currentFileIndex === index) displayCurrentFile();
+        }
+      });
+    };
+    reader.readAsText(file);
+  }
+  // Text/Code files
+  else if (['html', 'css', 'js', 'json', 'txt', 'xml', 'md', 'py', 'java', 'cpp', 'c', 'h', 'php', 'rb', 'go', 'rs', 'swift', 'kt', 'sql', 'yml', 'yaml', 'sh', 'bat'].includes(ext)) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const pre = document.createElement('pre');
+      pre.textContent = e.target.result;
+      fileData.content = pre.outerHTML;
+      if (currentFileIndex === index) displayCurrentFile();
+    };
+    reader.readAsText(file);
+  }
+  // Word documents
+  else if (['doc', 'docx'].includes(ext)) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      mammoth.convertToHtml({arrayBuffer: e.target.result})
+        .then(result => {
+          fileData.content = `<div style="max-width:800px;margin:0 auto;line-height:1.6;">${result.value}</div>`;
+          if (currentFileIndex === index) displayCurrentFile();
+        })
+        .catch(err => {
+          fileData.content = `<div class="error">Không thể đọc file Word: ${err.message}</div>`;
+          if (currentFileIndex === index) displayCurrentFile();
+        });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  // Excel files
+  else if (['xls', 'xlsx'].includes(ext)) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        
+        let html = '';
+        workbook.SheetNames.forEach(sheetName => {
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+          html += `<h3 style="margin: 20px 0 10px;font-size:18px;">${sheetName}</h3>`;
+          html += generateTable(jsonData);
+        });
+        
+        fileData.content = html;
+        if (currentFileIndex === index) displayCurrentFile();
+      } catch (err) {
+        fileData.content = `<div class="error">Không thể đọc file Excel: ${err.message}</div>`;
+        if (currentFileIndex === index) displayCurrentFile();
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  // PowerPoint
+  else if (['ppt', 'pptx'].includes(ext)) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const blob = new Blob([e.target.result], {type: file.type});
+      const url = URL.createObjectURL(blob);
+      fileData.content = `
+        <div class="info">Đang tải PowerPoint qua Office Online Viewer...</div>
+        <iframe src="https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(window.location.href)}#${url}"></iframe>
+      `;
+      if (currentFileIndex === index) displayCurrentFile();
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  // PSD (basic info only)
+  else if (ext === 'psd') {
+    fileData.content = `
+      <div class="info">
+        <h3>File PSD: ${file.name}</h3>
+        <p>Kích thước: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+        <p>File PSD không thể xem chi tiết trong trình duyệt.</p>
+        <p>Vui lòng sử dụng Adobe Photoshop hoặc phần mềm tương thích.</p>
+      </div>
+    `;
+    if (currentFileIndex === index) displayCurrentFile();
+  }
+  // AI (Adobe Illustrator)
+  else if (ext === 'ai') {
+    fileData.content = `
+      <div class="info">
+        <h3>File AI: ${file.name}</h3>
+        <p>Kích thước: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+        <p>File Adobe Illustrator không thể xem chi tiết trong trình duyệt.</p>
+        <p>Vui lòng sử dụng Adobe Illustrator hoặc phần mềm tương thích.</p>
+      </div>
+    `;
+    if (currentFileIndex === index) displayCurrentFile();
+  }
+  // ZIP/RAR
+  else if (['zip', 'rar', '7z'].includes(ext)) {
+    fileData.content = `
+      <div class="info">
+        <h3>File nén: ${file.name}</h3>
+        <p>Kích thước: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+        <p>File nén cần được giải nén để xem nội dung.</p>
+      </div>
+    `;
+    if (currentFileIndex === index) displayCurrentFile();
+  }
+  else {
+    fileData.content = `<div class="error">Định dạng file không được hỗ trợ: .${ext}</div>`;
+    if (currentFileIndex === index) displayCurrentFile();
+  }
+}
+
+async function loadPDF(file, fileData, index) {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+    
+    let html = '<div style="background:#f5f5f5;padding:20px;">';
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({scale: 1.5});
+      
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      
+      await page.render({
+        canvasContext: context,
+        viewport: viewport
+      }).promise;
+      
+      html += `<div style="margin-bottom:20px;background:#fff;padding:10px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        <div style="text-align:center;margin-bottom:10px;color:#666;">Trang ${i}/${pdf.numPages}</div>
+        <img src="${canvas.toDataURL()}" style="max-width:100%;height:auto;display:block;margin:0 auto;">
+      </div>`;
+    }
+    
+    html += '</div>';
+    fileData.content = html;
+    if (currentFileIndex === index) displayCurrentFile();
+  } catch (err) {
+    fileData.content = `<div class="error">Không thể đọc file PDF: ${err.message}</div>`;
+    if (currentFileIndex === index) displayCurrentFile();
+  }
+}
+
+function generateTable(data) {
+  if (!data || data.length === 0) return '<div class="error">Không có dữ liệu</div>';
+  
+  let html = '<table>';
+  
+  data.forEach((row, i) => {
+    html += '<tr>';
+    row.forEach(cell => {
+      const tag = i === 0 ? 'th' : 'td';
+      html += `<${tag}>${cell || ''}</${tag}>`;
+    });
+    html += '</tr>';
+  });
+  
+  html += '</table>';
+  return html;
+}
+
+function renderTabs() {
+  tabs.innerHTML = '';
+  
+  openFiles.forEach((fileData, index) => {
+    const tab = document.createElement('div');
+    tab.className = 'tab';
+    if (index === currentFileIndex) tab.classList.add('active');
+    
+    const name = document.createElement('span');
+    name.textContent = fileData.name;
+    tab.appendChild(name);
+    
+    const close = document.createElement('span');
+    close.className = 'tab-close';
+    close.textContent = '✕';
+    close.onclick = (e) => {
+      e.stopPropagation();
+      closeFile(index);
+    };
+    tab.appendChild(close);
+    
+    tab.onclick = () => switchToFile(index);
+    tabs.appendChild(tab);
+  });
+  
+  if (openFiles.length > 0) {
+    tabs.classList.add('active');
+  } else {
+    tabs.classList.remove('active');
+  }
+}
+
+function switchToFile(index) {
+  currentFileIndex = index;
+  renderTabs();
+  displayCurrentFile();
+  showViewer();
+}
+
+function displayCurrentFile() {
+  if (currentFileIndex >= 0 && currentFileIndex < openFiles.length) {
+    const fileData = openFiles[currentFileIndex];
+    fileName.textContent = fileData.name;
+    
+    if (fileData.content) {
+      content.innerHTML = fileData.content;
+    } else {
+      content.innerHTML = '<div class="loading">Đang tải...</div>';
+    }
+  }
+}
+
+function closeFile(index) {
+  openFiles.splice(index, 1);
+  
+  if (currentFileIndex === index) {
+    if (openFiles.length > 0) {
+      currentFileIndex = Math.min(index, openFiles.length - 1);
+    } else {
+      currentFileIndex = -1;
+      hideViewer();
+    }
+  } else if (currentFileIndex > index) {
+    currentFileIndex--;
+  }
+  
+  renderTabs();
+  if (currentFileIndex >= 0) {
+    displayCurrentFile();
+  }
+}
+
+function showViewer() {
+  dropzone.classList.add('hidden');
+  viewer.classList.add('active');
+}
+
+function hideViewer() {
+  dropzone.classList.remove('hidden');
+  viewer.classList.remove('active');
+  content.innerHTML = '';
+  openFiles = [];
+  currentFileIndex = -1;
+  renderTabs();
+}
+
+closeBtn.addEventListener('click', hideViewer);
+
+// Allow click to select file
+dropzone.addEventListener('click', () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.onchange = (e) => {
+    for (let i = 0; i < e.target.files.length; i++) {
+      addFile(e.target.files[i]);
+    }
+  };
+  input.click();
+});
+
+// Allow drag files when viewer is open
+viewer.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const dt = e.dataTransfer;
+  const files = dt.files;
+  
+  for (let i = 0; i < files.length; i++) {
+    addFile(files[i]);
+  }
+});
+
+['dragenter', 'dragover'].forEach(eventName => {
+  viewer.addEventListener(eventName, preventDefaults, false);
+});
+</script>
+
+</body>
+</html>
